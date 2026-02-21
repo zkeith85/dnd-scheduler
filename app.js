@@ -42,6 +42,8 @@ const playerList = document.getElementById("player-list");
 const boardWrap = document.getElementById("board-wrap");
 const results = document.getElementById("results");
 const nextSession = document.getElementById("next-session");
+const queueWrap = document.getElementById("queue-wrap");
+const sessionQueue = document.getElementById("session-queue");
 const editorNote = document.getElementById("editor-note");
 const resetBtn = document.getElementById("reset-btn");
 
@@ -408,6 +410,8 @@ function renderBoard() {
 function renderResults() {
   results.innerHTML = "";
   nextSession.textContent = "";
+  sessionQueue.innerHTML = "";
+  queueWrap.style.display = "none";
   if (!state.dates.length || !state.players.length) {
     results.innerHTML = '<li class="empty">Results will appear once your board has players and dates.</li>';
     nextSession.textContent = "Next session lock-in: waiting for dates.";
@@ -428,6 +432,9 @@ function renderResults() {
   const earliestFullMatch = scores
     .filter((score) => score.count === state.players.length)
     .sort((a, b) => a.date.localeCompare(b.date) || blockOrder(a.blockKey) - blockOrder(b.blockKey))[0];
+  const fullMatches = scores
+    .filter((score) => score.count === state.players.length)
+    .sort((a, b) => a.date.localeCompare(b.date) || blockOrder(a.blockKey) - blockOrder(b.blockKey));
 
   for (const result of scores.slice(0, 5)) {
     const li = document.createElement("li");
@@ -443,6 +450,15 @@ function renderResults() {
 
   if (earliestFullMatch) {
     nextSession.textContent = `Next session lock-in: ${formatDate(earliestFullMatch.date)} (${earliestFullMatch.block})`;
+    const queuedMatches = fullMatches.slice(1);
+    if (queuedMatches.length) {
+      queueWrap.style.display = "block";
+      for (const queued of queuedMatches.slice(0, 5)) {
+        const li = document.createElement("li");
+        li.textContent = `${formatDate(queued.date)} (${queued.block})`;
+        sessionQueue.appendChild(li);
+      }
+    }
   } else {
     nextSession.textContent = "Next session lock-in: no date/time has full attendance yet.";
   }

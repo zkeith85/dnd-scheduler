@@ -257,6 +257,25 @@ td.locked {
   font-weight: 700;
 }
 
+.queue-wrap {
+  margin-top: 0.65rem;
+  padding-top: 0.45rem;
+  border-top: 1px dashed rgba(255, 196, 122, 0.18);
+}
+
+.queue-title {
+  margin: 0;
+  color: #ffd08b;
+  font-weight: 700;
+}
+
+.queue-list {
+  margin: 0.35rem 0 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.2rem;
+}
+
 .empty {
   color: var(--muted);
   margin: 0;
