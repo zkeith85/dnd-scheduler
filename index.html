@@ -21,7 +21,14 @@
       <h2>Join Month Schedule</h2>
       <form id="join-form" class="stack">
         <label for="name-input">Your name</label>
-        <input id="name-input" type="text" maxlength="40" placeholder="e.g. Aria" required>
+        <select id="name-input" required>
+          <option value="Crosby">Crosby</option>
+          <option value="Gabi">Gabi</option>
+          <option value="Jacquie">Jacquie</option>
+          <option value="Nick">Nick</option>
+          <option value="Rick">Rick</option>
+          <option value="Zak">Zak</option>
+        </select>
 
         <label for="month-input">Scheduling month</label>
         <div class="inline">
@@ -61,14 +68,8 @@
     </section>
 
     <section class="card form-card">
-      <h2>Add Players</h2>
-      <form id="player-form" class="stack">
-        <label for="player-input">Player name</label>
-        <div class="inline">
-          <input id="player-input" type="text" maxlength="40" placeholder="e.g. Aria" required>
-          <button type="submit">Add Player</button>
-        </div>
-      </form>
+      <h2>Party Members</h2>
+      <p class="hint">Roster is fixed for this campaign.</p>
       <div id="player-list" class="chip-list"></div>
     </section>
 
@@ -77,13 +78,14 @@
         <h2>Availability Board</h2>
         <button id="reset-btn" class="ghost">Reset</button>
       </div>
-      <p class="hint">Click cells to toggle availability. Green means available.</p>
+      <p class="hint">Each date has Morning and Afternoon. Click cells to toggle availability. Green means available.</p>
       <div id="board-wrap" class="board-wrap"></div>
     </section>
 
     <section class="card">
       <h2>Best Session Dates</h2>
       <ol id="results" class="results"></ol>
+      <p id="next-session" class="next-session"></p>
     </section>
   </main>
 

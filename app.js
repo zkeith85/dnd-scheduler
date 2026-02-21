@@ -22,6 +22,11 @@ const SCHEDULE_MONTHS = [
   "2026-11",
   "2026-12"
 ];
+const FIXED_PLAYERS = ["Crosby", "Gabi", "Jacquie", "Nick", "Rick", "Zak"];
+const TIME_BLOCKS = [
+  { key: "morning", label: "Morning" },
+  { key: "afternoon", label: "Afternoon" }
+];
 
 const joinForm = document.getElementById("join-form");
 const nameInput = document.getElementById("name-input");
@@ -31,17 +36,16 @@ const shareLinkEl = document.getElementById("share-link");
 const copyLinkBtn = document.getElementById("copy-link-btn");
 
 const dateForm = document.getElementById("date-form");
-const playerForm = document.getElementById("player-form");
 const dateInput = document.getElementById("date-input");
-const playerInput = document.getElementById("player-input");
 const dateList = document.getElementById("date-list");
 const playerList = document.getElementById("player-list");
 const boardWrap = document.getElementById("board-wrap");
 const results = document.getElementById("results");
+const nextSession = document.getElementById("next-session");
 const resetBtn = document.getElementById("reset-btn");
 
 const state = {
-  players: [],
+  players: [...FIXED_PLAYERS],
   dates: [],
   availability: {}
 };
@@ -72,10 +76,10 @@ function boot() {
 function wireStaticHandlers() {
   joinForm.addEventListener("submit", async (event) => {
     event.preventDefault();
-    const name = sanitizePlayerName(nameInput.value);
+    const name = normalizePlayerName(nameInput.value);
     const monthId = sanitizeMonthId(monthInput.value);
     if (!name || !monthId) {
-      setStatus("Enter a valid name and select a month.", true);
+      setStatus("Select your name and a month.", true);
       return;
     }
     nameInput.value = name;
@@ -124,25 +128,6 @@ function wireStaticHandlers() {
     });
   });
 
-  playerForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    if (!connected) {
-      return;
-    }
-    const name = sanitizePlayerName(playerInput.value);
-    if (!name) {
-      return;
-    }
-    playerInput.value = "";
-    await mutateRoom((data) => {
-      if (data.players.includes(name)) {
-        return;
-      }
-      data.players.push(name);
-      ensurePlayerAvailability(data, name);
-    });
-  });
-
   resetBtn.addEventListener("click", async () => {
     if (!connected) {
       return;
@@ -151,7 +136,7 @@ function wireStaticHandlers() {
       return;
     }
     await mutateRoom((data) => {
-      data.players = [];
+      data.players = [...FIXED_PLAYERS];
       data.dates = [];
       data.availability = {};
     });
@@ -162,7 +147,7 @@ function restoreSessionFromUrlOrStorage() {
   const params = new URLSearchParams(window.location.search);
   const monthFromQuery = sanitizeMonthId(params.get("month") || params.get("room") || "");
   const monthFromStorage = sanitizeMonthId(localStorage.getItem(LOCAL_MONTH_KEY) || "");
-  const nameFromStorage = sanitizePlayerName(localStorage.getItem(LOCAL_USER_KEY) || "");
+  const nameFromStorage = normalizePlayerName(localStorage.getItem(LOCAL_USER_KEY) || "");
 
   if (nameFromStorage) {
     nameInput.value = nameFromStorage;
@@ -222,10 +207,8 @@ async function joinRoom(roomId, userName) {
     await runTransaction(db, async (tx) => {
       const snapshot = await tx.get(roomRef);
       const roomData = normalizeState(snapshot.exists() ? snapshot.data() : null);
-      if (!roomData.players.includes(userName)) {
-        roomData.players.push(userName);
-      }
-      for (const player of roomData.players) {
+      applyFixedPlayers(roomData);
+      for (const player of FIXED_PLAYERS) {
         ensurePlayerAvailability(roomData, player);
       }
       tx.set(roomRef, { ...roomData, updatedAt: serverTimestamp() }, { merge: true });
@@ -254,19 +237,23 @@ async function mutateRoom(mutator) {
 }
 
 function sanitizeRoomData(data) {
-  data.players = [...new Set(data.players.map(sanitizePlayerName).filter(Boolean))];
+  applyFixedPlayers(data);
   data.dates = [...new Set(data.dates.filter((date) => validDateString(date) && isDateInMonth(date, activeRoomId)))].sort();
   if (!data.availability || typeof data.availability !== "object") {
     data.availability = {};
   }
-  for (const player of data.players) {
+  for (const player of FIXED_PLAYERS) {
     ensurePlayerAvailability(data, player);
   }
   for (const key of Object.keys(data.availability)) {
-    if (!data.players.includes(key)) {
+    if (!FIXED_PLAYERS.includes(key)) {
       delete data.availability[key];
     }
   }
+}
+
+function applyFixedPlayers(data) {
+  data.players = [...FIXED_PLAYERS];
 }
 
 function ensurePlayerAvailability(data, player) {
@@ -274,9 +261,7 @@ function ensurePlayerAvailability(data, player) {
     data.availability[player] = {};
   }
   for (const date of data.dates) {
-    if (typeof data.availability[player][date] !== "boolean") {
-      data.availability[player][date] = false;
-    }
+    data.availability[player][date] = normalizeTimeSlots(data.availability[player][date]);
   }
   for (const date of Object.keys(data.availability[player])) {
     if (!data.dates.includes(date)) {
@@ -296,17 +281,12 @@ function removeDate(targetDate) {
   });
 }
 
-function removePlayer(targetPlayer) {
-  mutateRoom((data) => {
-    data.players = data.players.filter((p) => p !== targetPlayer);
-    delete data.availability[targetPlayer];
-  });
-}
-
-function toggleAvailability(player, date) {
+function toggleAvailability(player, date, block) {
   mutateRoom((data) => {
     ensurePlayerAvailability(data, player);
-    data.availability[player][date] = !data.availability[player][date];
+    const slots = normalizeTimeSlots(data.availability[player][date]);
+    slots[block] = !slots[block];
+    data.availability[player][date] = slots;
   });
 }
 
@@ -344,7 +324,7 @@ function renderChips() {
   }
 
   if (!state.players.length) {
-    playerList.innerHTML = '<p class="empty">No players yet.</p>';
+    playerList.innerHTML = '<p class="empty">Fixed roster is unavailable.</p>';
   } else {
     for (const player of state.players) {
       const chip = document.createElement("span");
@@ -354,14 +334,6 @@ function renderChips() {
       label.textContent = player;
       chip.appendChild(label);
 
-      const button = document.createElement("button");
-      button.className = "remove";
-      button.setAttribute("aria-label", `Remove ${player}`);
-      button.type = "button";
-      button.textContent = "x";
-      button.addEventListener("click", () => removePlayer(player));
-      chip.appendChild(button);
-
       playerList.appendChild(chip);
     }
   }
@@ -369,21 +341,33 @@ function renderChips() {
 
 function renderBoard() {
   if (!state.dates.length || !state.players.length) {
-    boardWrap.innerHTML = '<p class="empty" style="padding: 0.8rem;">Add at least one date and one player.</p>';
+    boardWrap.innerHTML = '<p class="empty" style="padding: 0.8rem;">Add at least one date.</p>';
     return;
   }
 
   const table = document.createElement("table");
   const thead = document.createElement("thead");
-  const headerRow = document.createElement("tr");
+  const topHeaderRow = document.createElement("tr");
+  const blockHeaderRow = document.createElement("tr");
+  const playerHeader = document.createElement("th");
+  playerHeader.textContent = "Player";
+  playerHeader.setAttribute("rowspan", "2");
+  topHeaderRow.appendChild(playerHeader);
 
-  headerRow.appendChild(document.createElement("th")).textContent = "Player";
   for (const date of state.dates) {
-    const th = document.createElement("th");
-    th.textContent = formatDate(date);
-    headerRow.appendChild(th);
+    const dateHeader = document.createElement("th");
+    dateHeader.textContent = formatDate(date);
+    dateHeader.setAttribute("colspan", String(TIME_BLOCKS.length));
+    topHeaderRow.appendChild(dateHeader);
+
+    for (const block of TIME_BLOCKS) {
+      const blockHeader = document.createElement("th");
+      blockHeader.textContent = block.label;
+      blockHeaderRow.appendChild(blockHeader);
+    }
   }
-  thead.appendChild(headerRow);
+  thead.appendChild(topHeaderRow);
+  thead.appendChild(blockHeaderRow);
   table.appendChild(thead);
 
   const tbody = document.createElement("tbody");
@@ -392,12 +376,15 @@ function renderBoard() {
     row.appendChild(document.createElement("td")).textContent = player;
 
     for (const date of state.dates) {
-      const td = document.createElement("td");
-      const available = Boolean(state.availability[player]?.[date]);
-      td.className = "toggle" + (available ? " available" : "");
-      td.textContent = available ? "Available" : "No";
-      td.addEventListener("click", () => toggleAvailability(player, date));
-      row.appendChild(td);
+      const slots = normalizeTimeSlots(state.availability[player]?.[date]);
+      for (const block of TIME_BLOCKS) {
+        const td = document.createElement("td");
+        const available = Boolean(slots[block.key]);
+        td.className = "toggle" + (available ? " available" : "");
+        td.textContent = available ? "Yes" : "No";
+        td.addEventListener("click", () => toggleAvailability(player, date, block.key));
+        row.appendChild(td);
+      }
     }
     tbody.appendChild(row);
   }
@@ -409,21 +396,31 @@ function renderBoard() {
 
 function renderResults() {
   results.innerHTML = "";
+  nextSession.textContent = "";
   if (!state.dates.length || !state.players.length) {
     results.innerHTML = '<li class="empty">Results will appear once your board has players and dates.</li>';
+    nextSession.textContent = "Next session lock-in: waiting for dates.";
     return;
   }
 
   const scores = state.dates
-    .map((date) => {
-      const available = state.players.filter((player) => Boolean(state.availability[player]?.[date]));
-      return { date, count: available.length, available };
-    })
-    .sort((a, b) => b.count - a.count || a.date.localeCompare(b.date));
+    .flatMap((date) =>
+      TIME_BLOCKS.map((block) => {
+        const available = state.players.filter((player) => {
+          const slots = normalizeTimeSlots(state.availability[player]?.[date]);
+          return Boolean(slots[block.key]);
+        });
+        return { date, block: block.label, blockKey: block.key, count: available.length, available };
+      })
+    )
+    .sort((a, b) => b.count - a.count || a.date.localeCompare(b.date) || blockOrder(a.blockKey) - blockOrder(b.blockKey));
+  const earliestFullMatch = scores
+    .filter((score) => score.count === state.players.length)
+    .sort((a, b) => a.date.localeCompare(b.date) || blockOrder(a.blockKey) - blockOrder(b.blockKey))[0];
 
-  for (const result of scores.slice(0, 3)) {
+  for (const result of scores.slice(0, 5)) {
     const li = document.createElement("li");
-    li.textContent = `${formatDate(result.date)} - ${result.count}/${state.players.length} available`;
+    li.textContent = `${formatDate(result.date)} (${result.block}) - ${result.count}/${state.players.length} available`;
     if (result.available.length) {
       const names = document.createElement("div");
       names.className = "hint";
@@ -431,6 +428,12 @@ function renderResults() {
       li.appendChild(names);
     }
     results.appendChild(li);
+  }
+
+  if (earliestFullMatch) {
+    nextSession.textContent = `Next session lock-in: ${formatDate(earliestFullMatch.date)} (${earliestFullMatch.block})`;
+  } else {
+    nextSession.textContent = "Next session lock-in: no date/time has full attendance yet.";
   }
 }
 
@@ -451,6 +454,24 @@ function sanitizeMonthId(raw) {
 
 function sanitizePlayerName(raw) {
   return String(raw || "").trim().slice(0, 40);
+}
+
+function normalizePlayerName(raw) {
+  const normalized = sanitizePlayerName(raw);
+  return FIXED_PLAYERS.includes(normalized) ? normalized : "";
+}
+
+function normalizeTimeSlots(value) {
+  if (typeof value === "boolean") {
+    return { morning: value, afternoon: value };
+  }
+  if (!value || typeof value !== "object") {
+    return { morning: false, afternoon: false };
+  }
+  return {
+    morning: Boolean(value.morning),
+    afternoon: Boolean(value.afternoon)
+  };
 }
 
 function isConfigReady(config) {
@@ -485,6 +506,10 @@ function formatDate(dateString) {
 
 function roomShareLink(roomId) {
   return `${window.location.origin}${window.location.pathname}?month=${encodeURIComponent(roomId)}`;
+}
+
+function blockOrder(blockKey) {
+  return TIME_BLOCKS.findIndex((b) => b.key === blockKey);
 }
 
 function updateShareLink() {
@@ -532,10 +557,10 @@ function setStatus(message, isError = false) {
 
 function setConnectedUI(isConnected) {
   dateInput.disabled = !isConnected;
-  playerInput.disabled = !isConnected;
   dateForm.querySelector("button[type='submit']").disabled = !isConnected;
-  playerForm.querySelector("button[type='submit']").disabled = !isConnected;
   resetBtn.disabled = !isConnected;
+  nameInput.disabled = false;
+  monthInput.disabled = false;
   copyLinkBtn.disabled = !activeRoomId;
   updateShareLink();
 }
