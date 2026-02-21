@@ -27,6 +27,10 @@ const TIME_BLOCKS = [
   { key: "morning", label: "Morning" },
   { key: "afternoon", label: "Afternoon" }
 ];
+const SESSION_TIME_RANGES = {
+  morning: { start: "11:00", end: "15:00" },
+  afternoon: { start: "15:00", end: "19:00" }
+};
 
 const joinForm = document.getElementById("join-form");
 const nameInput = document.getElementById("name-input");
@@ -409,7 +413,7 @@ function renderBoard() {
 
 function renderResults() {
   results.innerHTML = "";
-  nextSession.textContent = "";
+  nextSession.innerHTML = "";
   sessionQueue.innerHTML = "";
   queueWrap.style.display = "none";
   if (!state.dates.length || !state.players.length) {
@@ -449,13 +453,17 @@ function renderResults() {
   }
 
   if (earliestFullMatch) {
-    nextSession.textContent = `Next session lock-in: ${formatDate(earliestFullMatch.date)} (${earliestFullMatch.block})`;
+    nextSession.appendChild(
+      document.createTextNode(`Next session lock-in: ${formatDate(earliestFullMatch.date)} (${earliestFullMatch.block})`)
+    );
+    nextSession.appendChild(createCalendarLink(earliestFullMatch.date, earliestFullMatch.blockKey, "Add to Google Calendar"));
     const queuedMatches = fullMatches.slice(1);
     if (queuedMatches.length) {
       queueWrap.style.display = "block";
       for (const queued of queuedMatches.slice(0, 5)) {
         const li = document.createElement("li");
-        li.textContent = `${formatDate(queued.date)} (${queued.block})`;
+        li.appendChild(document.createTextNode(`${formatDate(queued.date)} (${queued.block})`));
+        li.appendChild(createCalendarLink(queued.date, queued.blockKey, "Add"));
         sessionQueue.appendChild(li);
       }
     }
@@ -537,6 +545,45 @@ function roomShareLink(roomId) {
 
 function blockOrder(blockKey) {
   return TIME_BLOCKS.findIndex((b) => b.key === blockKey);
+}
+
+function createCalendarLink(dateString, blockKey, label) {
+  const link = document.createElement("a");
+  link.className = "calendar-link";
+  link.href = buildGoogleCalendarUrl(dateString, blockKey);
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  link.textContent = label;
+  return link;
+}
+
+function buildGoogleCalendarUrl(dateString, blockKey) {
+  const range = SESSION_TIME_RANGES[blockKey] || SESSION_TIME_RANGES.morning;
+  const eventTitle = "Wild Beyond the Witchlight - D&D Session";
+  const eventDetails = [
+    "Campaign: The Wild Beyond the Witchlight",
+    `Time Block: ${blockKey === "afternoon" ? "Afternoon" : "Morning"}`,
+    `Scheduler: ${roomShareLink(activeRoomId || sanitizeMonthId(dateString.slice(0, 7)) || "2026-02")}`
+  ].join("\n");
+  const eventLocation = "In person";
+  const startStamp = toCalendarDateTime(dateString, range.start);
+  const endStamp = toCalendarDateTime(dateString, range.end);
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Chicago";
+
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    text: eventTitle,
+    dates: `${startStamp}/${endStamp}`,
+    details: eventDetails,
+    location: eventLocation,
+    ctz: timezone
+  });
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
+function toCalendarDateTime(dateString, timeString) {
+  const [hours, minutes] = timeString.split(":");
+  return `${dateString.replaceAll("-", "")}T${hours}${minutes}00`;
 }
 
 function updateShareLink() {

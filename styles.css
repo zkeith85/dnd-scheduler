@@ -278,6 +278,22 @@ td.locked {
   gap: 0.2rem;
 }
 
+.calendar-link {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.18rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: #ffe7c6;
+  text-decoration: none;
+  font-size: 0.82rem;
+  background: rgba(255, 108, 174, 0.22);
+}
+
+.calendar-link:hover {
+  background: rgba(255, 108, 174, 0.35);
+}
+
 .empty {
   color: var(--muted);
   margin: 0;
