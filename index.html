@@ -6,15 +6,17 @@
   <title>D&D Session Scheduler</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;700&family=Crimson+Text:wght@400;600;700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=5">
 </head>
 <body>
+  <div class="bg-art" aria-hidden="true"></div>
   <main class="app">
     <header class="hero">
       <p class="eyebrow">Dungeons & Dragons</p>
       <h1>Session Scheduler</h1>
-      <p class="sub">Join your month schedule, pick dates, and instantly see the best in-person session options.</p>
+      <p class="campaign">The Wild Beyond the Witchlight</p>
+      <p class="sub">Track monthly availability for your carnival crew and lock in the next in-person session fast.</p>
     </header>
 
     <section class="card form-card">
@@ -78,7 +80,8 @@
         <h2>Availability Board</h2>
         <button id="reset-btn" class="ghost">Reset</button>
       </div>
-      <p class="hint">Each date has Morning and Afternoon. Click cells to toggle availability. Green means available.</p>
+      <p class="hint">Each date has Morning and Afternoon. You can edit only your own row.</p>
+      <p id="editor-note" class="hint"></p>
       <div id="board-wrap" class="board-wrap"></div>
     </section>
 
@@ -89,7 +92,7 @@
     </section>
   </main>
 
-  <script src="firebase-config.js?v=4"></script>
-  <script type="module" src="app.js?v=4"></script>
+  <script src="firebase-config.js?v=6"></script>
+  <script type="module" src="app.js?v=6"></script>
 </body>
 </html>

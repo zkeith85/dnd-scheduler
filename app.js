@@ -42,6 +42,7 @@ const playerList = document.getElementById("player-list");
 const boardWrap = document.getElementById("board-wrap");
 const results = document.getElementById("results");
 const nextSession = document.getElementById("next-session");
+const editorNote = document.getElementById("editor-note");
 const resetBtn = document.getElementById("reset-btn");
 
 const state = {
@@ -282,6 +283,9 @@ function removeDate(targetDate) {
 }
 
 function toggleAvailability(player, date, block) {
+  if (player !== activeUser) {
+    return;
+  }
   mutateRoom((data) => {
     ensurePlayerAvailability(data, player);
     const slots = normalizeTimeSlots(data.availability[player][date]);
@@ -340,6 +344,10 @@ function renderChips() {
 }
 
 function renderBoard() {
+  editorNote.textContent = activeUser
+    ? `Editing as ${activeUser}. Other rows are view-only.`
+    : "Join a month to edit your row.";
+
   if (!state.dates.length || !state.players.length) {
     boardWrap.innerHTML = '<p class="empty" style="padding: 0.8rem;">Add at least one date.</p>';
     return;
@@ -380,9 +388,12 @@ function renderBoard() {
       for (const block of TIME_BLOCKS) {
         const td = document.createElement("td");
         const available = Boolean(slots[block.key]);
-        td.className = "toggle" + (available ? " available" : "");
+        const canEdit = player === activeUser;
+        td.className = (canEdit ? "toggle" : "locked") + (available ? " available" : "");
         td.textContent = available ? "Yes" : "No";
-        td.addEventListener("click", () => toggleAvailability(player, date, block.key));
+        if (canEdit) {
+          td.addEventListener("click", () => toggleAvailability(player, date, block.key));
+        }
         row.appendChild(td);
       }
     }
