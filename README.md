@@ -16,6 +16,16 @@ Shared month scheduler for tabletop sessions. Anyone with the month link can sub
 - `styles.css`
 - `app.js`
 - `firebase-config.js`
+- `assets/witchlight-hero.jpg` (optional local background image)
+
+## Witchlight Art Setup
+
+To use your preferred Witchlight artwork:
+
+1. Save your chosen image as `assets/witchlight-hero.jpg`
+2. Commit and push it with the app
+
+If that file is missing, the app falls back to a remote image.
 
 ## One-time Firebase setup
 
