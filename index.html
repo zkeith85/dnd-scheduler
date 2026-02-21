@@ -14,8 +14,27 @@
     <header class="hero">
       <p class="eyebrow">Dungeons & Dragons</p>
       <h1>Session Scheduler</h1>
-      <p class="sub">Pick dates, add your party, and instantly see the best in-person session options.</p>
+      <p class="sub">Join a shared room, pick dates, and instantly see the best in-person session options.</p>
     </header>
+
+    <section class="card form-card">
+      <h2>Join Shared Room</h2>
+      <form id="join-form" class="stack">
+        <label for="name-input">Your name</label>
+        <input id="name-input" type="text" maxlength="40" placeholder="e.g. Aria" required>
+
+        <label for="room-input">Room code</label>
+        <div class="inline">
+          <input id="room-input" type="text" maxlength="30" placeholder="e.g. friday-campaign" required>
+          <button type="submit">Join Room</button>
+        </div>
+      </form>
+      <p id="status" class="hint">Not connected.</p>
+      <div class="inline">
+        <p class="hint">Share room link: <a id="share-link" href="#" target="_blank" rel="noopener"></a></p>
+        <button id="copy-link-btn" class="ghost" type="button">Copy Link</button>
+      </div>
+    </section>
 
     <section class="card form-card">
       <h2>Create Candidate Dates</h2>
@@ -56,6 +75,7 @@
     </section>
   </main>
 
-  <script src="app.js"></script>
+  <script src="firebase-config.js"></script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>

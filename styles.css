@@ -98,6 +98,7 @@ label,
   display: flex;
   gap: 0.6rem;
   flex-wrap: wrap;
+  align-items: center;
 }
 
 input,
@@ -128,6 +129,11 @@ button {
 
 button:hover {
   background: var(--accent-strong);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 button.ghost {
@@ -222,6 +228,10 @@ td.toggle {
 .empty {
   color: var(--muted);
   margin: 0;
+}
+
+#share-link {
+  word-break: break-all;
 }
 
 @keyframes fade-up {

@@ -1,23 +1,80 @@
 # D&D In-Person Session Scheduler
 
-A simple browser-based app to schedule your tabletop sessions.
+Shared room scheduler for tabletop sessions. Anyone with the room link can submit availability and see updates live.
 
-## What it does
+## Features
 
-- Add possible session dates
-- Add player names
-- Toggle each player's availability per date
-- Automatically rank the best dates
-- Save everything in your browser (localStorage)
+- Shared room code for your campaign
+- Live sync across phones and desktop
+- Add/remove dates and players
+- Toggle availability per player/date
+- Automatic top date ranking
 
-## Run it
+## Files
 
-Open `index.html` in your browser.
+- `index.html`
+- `styles.css`
+- `app.js`
+- `firebase-config.js`
 
-Optional (if you prefer a local server):
+## One-time Firebase setup
+
+1. Create a Firebase project: <https://console.firebase.google.com/>
+2. In the project, create a **Web App**.
+3. Enable **Firestore Database** (start in Production or Test mode).
+4. Copy your Firebase web config values into `firebase-config.js`.
+
+`firebase-config.js` should look like this:
+
+```js
+window.FIREBASE_CONFIG = {
+  apiKey: "your-api-key",
+  authDomain: "your-project.firebaseapp.com",
+  projectId: "your-project-id",
+  storageBucket: "your-project.appspot.com",
+  messagingSenderId: "123456789",
+  appId: "1:123456789:web:abc123"
+};
+```
+
+## Firestore rules (simple room sharing)
+
+Use these rules so your group can read/write shared room docs:
+
+```txt
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /rooms/{roomId} {
+      allow read, write: if true;
+    }
+  }
+}
+```
+
+This is open access. For private use with friends, that is usually fine. If you want secure auth rules later, add Firebase Auth.
+
+## Run locally
+
+Open `index.html` directly, or run:
 
 ```powershell
 python -m http.server 8080
 ```
 
-Then open `http://localhost:8080`.
+Then open <http://localhost:8080>.
+
+## Deploy on GitHub Pages
+
+1. Push files to your GitHub repo.
+2. Repo `Settings` -> `Pages`.
+3. Source: `Deploy from a branch`.
+4. Branch: `main`, folder `/ (root)`.
+5. Open your Pages URL and join a room code.
+
+## How friends use it
+
+1. Open your GitHub Pages link on phone.
+2. Enter their name and the same room code.
+3. Tap availability cells.
+4. Everyone sees updates in real time.
