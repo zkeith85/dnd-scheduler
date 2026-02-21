@@ -107,7 +107,8 @@ button {
 }
 
 input[type="text"],
-input[type="date"] {
+input[type="date"],
+select {
   flex: 1 1 220px;
   min-height: 2.4rem;
   padding: 0.45rem 0.7rem;

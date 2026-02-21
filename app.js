@@ -1,6 +1,34 @@
-const STORAGE_KEY = "dnd_scheduler_v1";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+import {
+  doc,
+  getFirestore,
+  onSnapshot,
+  runTransaction,
+  serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
-const state = loadState();
+const LOCAL_USER_KEY = "dnd_scheduler_user_v1";
+const LOCAL_MONTH_KEY = "dnd_scheduler_month_v1";
+const SCHEDULE_MONTHS = [
+  "2026-02",
+  "2026-03",
+  "2026-04",
+  "2026-05",
+  "2026-06",
+  "2026-07",
+  "2026-08",
+  "2026-09",
+  "2026-10",
+  "2026-11",
+  "2026-12"
+];
+
+const joinForm = document.getElementById("join-form");
+const nameInput = document.getElementById("name-input");
+const monthInput = document.getElementById("month-input");
+const statusEl = document.getElementById("status");
+const shareLinkEl = document.getElementById("share-link");
+const copyLinkBtn = document.getElementById("copy-link-btn");
 
 const dateForm = document.getElementById("date-form");
 const playerForm = document.getElementById("player-form");
@@ -12,82 +40,280 @@ const boardWrap = document.getElementById("board-wrap");
 const results = document.getElementById("results");
 const resetBtn = document.getElementById("reset-btn");
 
-dateForm.addEventListener("submit", (event) => {
-  event.preventDefault();
-  const value = dateInput.value;
-  if (!value || state.dates.includes(value)) {
-    return;
-  }
-  state.dates.push(value);
-  state.dates.sort();
-  for (const player of state.players) {
-    ensurePlayerAvailability(player);
-  }
-  dateInput.value = "";
-  persistAndRender();
-});
+const state = {
+  players: [],
+  dates: [],
+  availability: {}
+};
 
-playerForm.addEventListener("submit", (event) => {
-  event.preventDefault();
-  const raw = playerInput.value.trim();
-  if (!raw) {
-    return;
-  }
-  const name = raw.slice(0, 40);
-  if (state.players.includes(name)) {
-    return;
-  }
-  state.players.push(name);
-  ensurePlayerAvailability(name);
-  playerInput.value = "";
-  persistAndRender();
-});
+let db = null;
+let activeRoomId = "";
+let activeUser = "";
+let unsubscribe = null;
+let connected = false;
 
-resetBtn.addEventListener("click", () => {
-  if (!confirm("Clear all players, dates, and availability?")) {
+boot();
+
+function boot() {
+  const config = window.FIREBASE_CONFIG;
+  if (!isConfigReady(config)) {
+    setStatus("Add your Firebase config in firebase-config.js to enable shared sync.", true);
+    setConnectedUI(false);
+    wireStaticHandlers();
+    render();
     return;
   }
-  state.players = [];
-  state.dates = [];
-  state.availability = {};
-  persistAndRender();
-});
 
-function persistAndRender() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  render();
+  db = getFirestore(initializeApp(config));
+  wireStaticHandlers();
+  restoreSessionFromUrlOrStorage();
 }
 
-function ensurePlayerAvailability(player) {
-  if (!state.availability[player]) {
-    state.availability[player] = {};
+function wireStaticHandlers() {
+  joinForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const name = sanitizePlayerName(nameInput.value);
+    const monthId = sanitizeMonthId(monthInput.value);
+    if (!name || !monthId) {
+      setStatus("Enter a valid name and select a month.", true);
+      return;
+    }
+    nameInput.value = name;
+    monthInput.value = monthId;
+    localStorage.setItem(LOCAL_USER_KEY, name);
+    localStorage.setItem(LOCAL_MONTH_KEY, monthId);
+    await joinRoom(monthId, name);
+  });
+
+  copyLinkBtn.addEventListener("click", async () => {
+    if (!activeRoomId) {
+      return;
+    }
+    const link = roomShareLink(activeRoomId);
+    try {
+      await navigator.clipboard.writeText(link);
+      setStatus("Month link copied.");
+    } catch {
+      setStatus(`Copy failed. Use this link: ${link}`, true);
+    }
+  });
+
+  dateForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!connected) {
+      return;
+    }
+    const value = dateInput.value;
+    if (!value) {
+      return;
+    }
+    if (!isDateInMonth(value, activeRoomId)) {
+      setStatus("Pick a date inside the selected month.", true);
+      return;
+    }
+    dateInput.value = "";
+    await mutateRoom((data) => {
+      if (data.dates.includes(value)) {
+        return;
+      }
+      data.dates.push(value);
+      data.dates.sort();
+      for (const player of data.players) {
+        ensurePlayerAvailability(data, player);
+      }
+    });
+  });
+
+  playerForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!connected) {
+      return;
+    }
+    const name = sanitizePlayerName(playerInput.value);
+    if (!name) {
+      return;
+    }
+    playerInput.value = "";
+    await mutateRoom((data) => {
+      if (data.players.includes(name)) {
+        return;
+      }
+      data.players.push(name);
+      ensurePlayerAvailability(data, name);
+    });
+  });
+
+  resetBtn.addEventListener("click", async () => {
+    if (!connected) {
+      return;
+    }
+    if (!confirm("Clear all players, dates, and availability for this month?")) {
+      return;
+    }
+    await mutateRoom((data) => {
+      data.players = [];
+      data.dates = [];
+      data.availability = {};
+    });
+  });
+}
+
+function restoreSessionFromUrlOrStorage() {
+  const params = new URLSearchParams(window.location.search);
+  const monthFromQuery = sanitizeMonthId(params.get("month") || params.get("room") || "");
+  const monthFromStorage = sanitizeMonthId(localStorage.getItem(LOCAL_MONTH_KEY) || "");
+  const nameFromStorage = sanitizePlayerName(localStorage.getItem(LOCAL_USER_KEY) || "");
+
+  if (nameFromStorage) {
+    nameInput.value = nameFromStorage;
   }
-  for (const date of state.dates) {
-    if (typeof state.availability[player][date] !== "boolean") {
-      state.availability[player][date] = false;
+  if (monthFromQuery || monthFromStorage) {
+    monthInput.value = monthFromQuery || monthFromStorage;
+  }
+
+  if (db && nameFromStorage && (monthFromQuery || monthFromStorage)) {
+    joinRoom(monthFromQuery || monthFromStorage, nameFromStorage);
+  } else {
+    render();
+    setConnectedUI(false);
+  }
+}
+
+async function joinRoom(roomId, userName) {
+  if (!db) {
+    setStatus("Firebase is not configured yet.", true);
+    return;
+  }
+  activeRoomId = roomId;
+  activeUser = userName;
+  connected = false;
+  setConnectedUI(false);
+  applyDateLimits(roomId);
+  updateShareLink();
+  setStatus("Connecting...");
+  setMonthInUrl(roomId);
+
+  if (unsubscribe) {
+    unsubscribe();
+    unsubscribe = null;
+  }
+
+  const roomRef = doc(db, "rooms", roomId);
+  unsubscribe = onSnapshot(
+    roomRef,
+    (snapshot) => {
+      const incoming = normalizeState(snapshot.exists() ? snapshot.data() : null);
+      state.players = incoming.players;
+      state.dates = incoming.dates;
+      state.availability = incoming.availability;
+      connected = true;
+      setConnectedUI(true);
+      render();
+      setStatus(`Connected to ${monthLabel(roomId)} schedule.`);
+    },
+    () => {
+      connected = false;
+      setConnectedUI(false);
+      setStatus("Lost connection to month schedule. Check Firebase config/rules.", true);
+    }
+  );
+
+  try {
+    await runTransaction(db, async (tx) => {
+      const snapshot = await tx.get(roomRef);
+      const roomData = normalizeState(snapshot.exists() ? snapshot.data() : null);
+      if (!roomData.players.includes(userName)) {
+        roomData.players.push(userName);
+      }
+      for (const player of roomData.players) {
+        ensurePlayerAvailability(roomData, player);
+      }
+      tx.set(roomRef, { ...roomData, updatedAt: serverTimestamp() }, { merge: true });
+    });
+  } catch {
+    setStatus("Could not join month schedule. Check Firestore rules and try again.", true);
+  }
+}
+
+async function mutateRoom(mutator) {
+  if (!db || !activeRoomId) {
+    return;
+  }
+  const roomRef = doc(db, "rooms", activeRoomId);
+  try {
+    await runTransaction(db, async (tx) => {
+      const snapshot = await tx.get(roomRef);
+      const roomData = normalizeState(snapshot.exists() ? snapshot.data() : null);
+      mutator(roomData);
+      sanitizeRoomData(roomData);
+      tx.set(roomRef, { ...roomData, updatedAt: serverTimestamp() }, { merge: true });
+    });
+  } catch {
+    setStatus("Save failed. Retry in a few seconds.", true);
+  }
+}
+
+function sanitizeRoomData(data) {
+  data.players = [...new Set(data.players.map(sanitizePlayerName).filter(Boolean))];
+  data.dates = [...new Set(data.dates.filter((date) => validDateString(date) && isDateInMonth(date, activeRoomId)))].sort();
+  if (!data.availability || typeof data.availability !== "object") {
+    data.availability = {};
+  }
+  for (const player of data.players) {
+    ensurePlayerAvailability(data, player);
+  }
+  for (const key of Object.keys(data.availability)) {
+    if (!data.players.includes(key)) {
+      delete data.availability[key];
+    }
+  }
+}
+
+function ensurePlayerAvailability(data, player) {
+  if (!data.availability[player] || typeof data.availability[player] !== "object") {
+    data.availability[player] = {};
+  }
+  for (const date of data.dates) {
+    if (typeof data.availability[player][date] !== "boolean") {
+      data.availability[player][date] = false;
+    }
+  }
+  for (const date of Object.keys(data.availability[player])) {
+    if (!data.dates.includes(date)) {
+      delete data.availability[player][date];
     }
   }
 }
 
 function removeDate(targetDate) {
-  state.dates = state.dates.filter((d) => d !== targetDate);
-  for (const player of state.players) {
-    if (state.availability[player]) {
-      delete state.availability[player][targetDate];
+  mutateRoom((data) => {
+    data.dates = data.dates.filter((d) => d !== targetDate);
+    for (const player of data.players) {
+      if (data.availability[player]) {
+        delete data.availability[player][targetDate];
+      }
     }
-  }
-  persistAndRender();
+  });
 }
 
 function removePlayer(targetPlayer) {
-  state.players = state.players.filter((p) => p !== targetPlayer);
-  delete state.availability[targetPlayer];
-  persistAndRender();
+  mutateRoom((data) => {
+    data.players = data.players.filter((p) => p !== targetPlayer);
+    delete data.availability[targetPlayer];
+  });
 }
 
 function toggleAvailability(player, date) {
-  state.availability[player][date] = !state.availability[player][date];
-  persistAndRender();
+  mutateRoom((data) => {
+    ensurePlayerAvailability(data, player);
+    data.availability[player][date] = !data.availability[player][date];
+  });
+}
+
+function render() {
+  renderChips();
+  renderBoard();
+  renderResults();
 }
 
 function renderChips() {
@@ -100,11 +326,19 @@ function renderChips() {
     for (const date of state.dates) {
       const chip = document.createElement("span");
       chip.className = "chip";
-      chip.innerHTML = `
-        <span>${formatDate(date)}</span>
-        <button class="remove" aria-label="Remove ${date}" type="button">x</button>
-      `;
-      chip.querySelector(".remove").addEventListener("click", () => removeDate(date));
+
+      const label = document.createElement("span");
+      label.textContent = formatDate(date);
+      chip.appendChild(label);
+
+      const button = document.createElement("button");
+      button.className = "remove";
+      button.setAttribute("aria-label", `Remove ${date}`);
+      button.type = "button";
+      button.textContent = "x";
+      button.addEventListener("click", () => removeDate(date));
+      chip.appendChild(button);
+
       dateList.appendChild(chip);
     }
   }
@@ -115,11 +349,19 @@ function renderChips() {
     for (const player of state.players) {
       const chip = document.createElement("span");
       chip.className = "chip";
-      chip.innerHTML = `
-        <span>${escapeHtml(player)}</span>
-        <button class="remove" aria-label="Remove ${player}" type="button">x</button>
-      `;
-      chip.querySelector(".remove").addEventListener("click", () => removePlayer(player));
+
+      const label = document.createElement("span");
+      label.textContent = player;
+      chip.appendChild(label);
+
+      const button = document.createElement("button");
+      button.className = "remove";
+      button.setAttribute("aria-label", `Remove ${player}`);
+      button.type = "button";
+      button.textContent = "x";
+      button.addEventListener("click", () => removePlayer(player));
+      chip.appendChild(button);
+
       playerList.appendChild(chip);
     }
   }
@@ -146,13 +388,12 @@ function renderBoard() {
 
   const tbody = document.createElement("tbody");
   for (const player of state.players) {
-    ensurePlayerAvailability(player);
     const row = document.createElement("tr");
     row.appendChild(document.createElement("td")).textContent = player;
 
     for (const date of state.dates) {
       const td = document.createElement("td");
-      const available = Boolean(state.availability[player][date]);
+      const available = Boolean(state.availability[player]?.[date]);
       td.className = "toggle" + (available ? " available" : "");
       td.textContent = available ? "Available" : "No";
       td.addEventListener("click", () => toggleAvailability(player, date));
@@ -176,11 +417,7 @@ function renderResults() {
   const scores = state.dates
     .map((date) => {
       const available = state.players.filter((player) => Boolean(state.availability[player]?.[date]));
-      return {
-        date,
-        count: available.length,
-        available
-      };
+      return { date, count: available.length, available };
     })
     .sort((a, b) => b.count - a.count || a.date.localeCompare(b.date));
 
@@ -197,27 +434,48 @@ function renderResults() {
   }
 }
 
-function render() {
-  renderChips();
-  renderBoard();
-  renderResults();
+function normalizeState(raw) {
+  const clean = {
+    players: Array.isArray(raw?.players) ? raw.players : [],
+    dates: Array.isArray(raw?.dates) ? raw.dates : [],
+    availability: raw?.availability && typeof raw.availability === "object" ? raw.availability : {}
+  };
+  sanitizeRoomData(clean);
+  return clean;
 }
 
-function loadState() {
-  const fallback = { players: [], dates: [], availability: {} };
-  try {
-    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
-    if (!parsed || typeof parsed !== "object") {
-      return fallback;
-    }
-    return {
-      players: Array.isArray(parsed.players) ? parsed.players : [],
-      dates: Array.isArray(parsed.dates) ? parsed.dates : [],
-      availability: parsed.availability && typeof parsed.availability === "object" ? parsed.availability : {}
-    };
-  } catch {
-    return fallback;
+function sanitizeMonthId(raw) {
+  const month = String(raw || "").trim();
+  return SCHEDULE_MONTHS.includes(month) ? month : "";
+}
+
+function sanitizePlayerName(raw) {
+  return String(raw || "").trim().slice(0, 40);
+}
+
+function isConfigReady(config) {
+  if (!config || typeof config !== "object") {
+    return false;
   }
+  const required = ["apiKey", "authDomain", "projectId", "appId"];
+  for (const key of required) {
+    const value = String(config[key] || "").trim();
+    if (!value || value.includes("REPLACE_ME")) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function validDateString(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function isDateInMonth(dateString, monthId) {
+  if (!validDateString(dateString) || !sanitizeMonthId(monthId)) {
+    return false;
+  }
+  return dateString.startsWith(`${monthId}-`);
 }
 
 function formatDate(dateString) {
@@ -225,13 +483,59 @@ function formatDate(dateString) {
   return date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
 }
 
-function escapeHtml(text) {
-  return text
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+function roomShareLink(roomId) {
+  return `${window.location.origin}${window.location.pathname}?month=${encodeURIComponent(roomId)}`;
 }
 
-render();
+function updateShareLink() {
+  if (!activeRoomId) {
+    shareLinkEl.textContent = "";
+    shareLinkEl.removeAttribute("href");
+    return;
+  }
+  const link = roomShareLink(activeRoomId);
+  shareLinkEl.textContent = link;
+  shareLinkEl.href = link;
+}
+
+function setMonthInUrl(roomId) {
+  const url = new URL(window.location.href);
+  url.searchParams.set("month", roomId);
+  window.history.replaceState({}, "", url);
+}
+
+function monthLabel(monthId) {
+  const [year, month] = monthId.split("-");
+  const date = new Date(`${monthId}-01T00:00:00`);
+  const monthName = date.toLocaleDateString(undefined, { month: "long" });
+  return `${monthName} ${year}`;
+}
+
+function applyDateLimits(monthId) {
+  if (!sanitizeMonthId(monthId)) {
+    dateInput.removeAttribute("min");
+    dateInput.removeAttribute("max");
+    return;
+  }
+  const [yearText, monthText] = monthId.split("-");
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const lastDay = new Date(year, month, 0).getDate();
+  dateInput.min = `${monthId}-01`;
+  dateInput.max = `${monthId}-${String(lastDay).padStart(2, "0")}`;
+}
+
+function setStatus(message, isError = false) {
+  statusEl.textContent = message;
+  statusEl.style.color = isError ? "#8a2315" : "";
+}
+
+function setConnectedUI(isConnected) {
+  dateInput.disabled = !isConnected;
+  playerInput.disabled = !isConnected;
+  dateForm.querySelector("button[type='submit']").disabled = !isConnected;
+  playerForm.querySelector("button[type='submit']").disabled = !isConnected;
+  resetBtn.disabled = !isConnected;
+  copyLinkBtn.disabled = !activeRoomId;
+  updateShareLink();
+}

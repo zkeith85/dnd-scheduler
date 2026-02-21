@@ -1,10 +1,10 @@
 # D&D In-Person Session Scheduler
 
-Shared room scheduler for tabletop sessions. Anyone with the room link can submit availability and see updates live.
+Shared month scheduler for tabletop sessions. Anyone with the month link can submit availability and see updates live.
 
 ## Features
 
-- Shared room code for your campaign
+- Fixed month schedules from February 2026 to December 2026
 - Live sync across phones and desktop
 - Add/remove dates and players
 - Toggle availability per player/date
@@ -37,9 +37,9 @@ window.FIREBASE_CONFIG = {
 };
 ```
 
-## Firestore rules (simple room sharing)
+## Firestore rules (simple shared scheduling)
 
-Use these rules so your group can read/write shared room docs:
+Use these rules so your group can read/write shared month docs:
 
 ```txt
 rules_version = '2';
@@ -70,11 +70,11 @@ Then open <http://localhost:8080>.
 2. Repo `Settings` -> `Pages`.
 3. Source: `Deploy from a branch`.
 4. Branch: `main`, folder `/ (root)`.
-5. Open your Pages URL and join a room code.
+5. Open your Pages URL and join a month schedule.
 
 ## How friends use it
 
 1. Open your GitHub Pages link on phone.
-2. Enter their name and the same room code.
+2. Enter their name and choose the same month.
 3. Tap availability cells.
 4. Everyone sees updates in real time.

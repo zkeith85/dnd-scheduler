@@ -14,24 +14,36 @@
     <header class="hero">
       <p class="eyebrow">Dungeons & Dragons</p>
       <h1>Session Scheduler</h1>
-      <p class="sub">Join a shared room, pick dates, and instantly see the best in-person session options.</p>
+      <p class="sub">Join your month schedule, pick dates, and instantly see the best in-person session options.</p>
     </header>
 
     <section class="card form-card">
-      <h2>Join Shared Room</h2>
+      <h2>Join Month Schedule</h2>
       <form id="join-form" class="stack">
         <label for="name-input">Your name</label>
         <input id="name-input" type="text" maxlength="40" placeholder="e.g. Aria" required>
 
-        <label for="room-input">Room code</label>
+        <label for="month-input">Scheduling month</label>
         <div class="inline">
-          <input id="room-input" type="text" maxlength="30" placeholder="e.g. friday-campaign" required>
-          <button type="submit">Join Room</button>
+          <select id="month-input" required>
+            <option value="2026-02">February 2026</option>
+            <option value="2026-03">March 2026</option>
+            <option value="2026-04">April 2026</option>
+            <option value="2026-05">May 2026</option>
+            <option value="2026-06">June 2026</option>
+            <option value="2026-07">July 2026</option>
+            <option value="2026-08">August 2026</option>
+            <option value="2026-09">September 2026</option>
+            <option value="2026-10">October 2026</option>
+            <option value="2026-11">November 2026</option>
+            <option value="2026-12">December 2026</option>
+          </select>
+          <button type="submit">Join Month</button>
         </div>
       </form>
       <p id="status" class="hint">Not connected.</p>
       <div class="inline">
-        <p class="hint">Share room link: <a id="share-link" href="#" target="_blank" rel="noopener"></a></p>
+        <p class="hint">Share month link: <a id="share-link" href="#" target="_blank" rel="noopener"></a></p>
         <button id="copy-link-btn" class="ghost" type="button">Copy Link</button>
       </div>
     </section>
