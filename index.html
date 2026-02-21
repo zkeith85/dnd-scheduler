@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>D&D Session Scheduler</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="app">
+    <header class="hero">
+      <p class="eyebrow">Dungeons & Dragons</p>
+      <h1>Session Scheduler</h1>
+      <p class="sub">Pick dates, add your party, and instantly see the best in-person session options.</p>
+    </header>
+
+    <section class="card form-card">
+      <h2>Create Candidate Dates</h2>
+      <form id="date-form" class="stack">
+        <label for="date-input">Session date</label>
+        <div class="inline">
+          <input id="date-input" type="date" required>
+          <button type="submit">Add Date</button>
+        </div>
+      </form>
+      <div id="date-list" class="chip-list"></div>
+    </section>
+
+    <section class="card form-card">
+      <h2>Add Players</h2>
+      <form id="player-form" class="stack">
+        <label for="player-input">Player name</label>
+        <div class="inline">
+          <input id="player-input" type="text" maxlength="40" placeholder="e.g. Aria" required>
+          <button type="submit">Add Player</button>
+        </div>
+      </form>
+      <div id="player-list" class="chip-list"></div>
+    </section>
+
+    <section class="card">
+      <div class="section-head">
+        <h2>Availability Board</h2>
+        <button id="reset-btn" class="ghost">Reset</button>
+      </div>
+      <p class="hint">Click cells to toggle availability. Green means available.</p>
+      <div id="board-wrap" class="board-wrap"></div>
+    </section>
+
+    <section class="card">
+      <h2>Best Session Dates</h2>
+      <ol id="results" class="results"></ol>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
