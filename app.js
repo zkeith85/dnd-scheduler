@@ -43,6 +43,7 @@ const dateForm = document.getElementById("date-form");
 const dateInput = document.getElementById("date-input");
 const dateList = document.getElementById("date-list");
 const playerList = document.getElementById("player-list");
+const trackerList = document.getElementById("tracker-list");
 const boardWrap = document.getElementById("board-wrap");
 const results = document.getElementById("results");
 const nextSession = document.getElementById("next-session");
@@ -54,7 +55,8 @@ const resetBtn = document.getElementById("reset-btn");
 const state = {
   players: [...FIXED_PLAYERS],
   dates: [],
-  availability: {}
+  availability: {},
+  responseMode: "explicit"
 };
 
 let db = null;
@@ -146,6 +148,7 @@ function wireStaticHandlers() {
       data.players = [...FIXED_PLAYERS];
       data.dates = [];
       data.availability = {};
+      data.responseMode = "explicit";
     });
   });
 }
@@ -244,31 +247,33 @@ async function mutateRoom(mutator) {
 }
 
 function sanitizeRoomData(data) {
+  const preserveFalseResponses = data.responseMode === "explicit";
   applyFixedPlayers(data);
   data.dates = [...new Set(data.dates.filter((date) => validDateString(date) && isDateInMonth(date, activeRoomId)))].sort();
   if (!data.availability || typeof data.availability !== "object") {
     data.availability = {};
   }
   for (const player of FIXED_PLAYERS) {
-    ensurePlayerAvailability(data, player);
+    ensurePlayerAvailability(data, player, preserveFalseResponses);
   }
   for (const key of Object.keys(data.availability)) {
     if (!FIXED_PLAYERS.includes(key)) {
       delete data.availability[key];
     }
   }
+  data.responseMode = "explicit";
 }
 
 function applyFixedPlayers(data) {
   data.players = [...FIXED_PLAYERS];
 }
 
-function ensurePlayerAvailability(data, player) {
+function ensurePlayerAvailability(data, player, preserveFalseResponses = true) {
   if (!data.availability[player] || typeof data.availability[player] !== "object") {
     data.availability[player] = {};
   }
   for (const date of data.dates) {
-    data.availability[player][date] = normalizeTimeSlots(data.availability[player][date]);
+    data.availability[player][date] = normalizeTimeSlots(data.availability[player][date], preserveFalseResponses);
   }
   for (const date of Object.keys(data.availability[player])) {
     if (!data.dates.includes(date)) {
@@ -295,13 +300,14 @@ function toggleAvailability(player, date, block) {
   mutateRoom((data) => {
     ensurePlayerAvailability(data, player);
     const slots = normalizeTimeSlots(data.availability[player][date]);
-    slots[block] = !slots[block];
+    slots[block] = nextResponseValue(slots[block]);
     data.availability[player][date] = slots;
   });
 }
 
 function render() {
   renderChips();
+  renderTracker();
   renderBoard();
   renderResults();
 }
@@ -393,10 +399,10 @@ function renderBoard() {
       const slots = normalizeTimeSlots(state.availability[player]?.[date]);
       for (const block of TIME_BLOCKS) {
         const td = document.createElement("td");
-        const available = Boolean(slots[block.key]);
+        const response = slots[block.key];
         const canEdit = player === activeUser;
-        td.className = (canEdit ? "toggle" : "locked") + (available ? " available" : "");
-        td.textContent = available ? "Yes" : "No";
+        td.className = getCellClass(canEdit, response);
+        td.textContent = formatResponseLabel(response);
         if (canEdit) {
           td.addEventListener("click", () => toggleAvailability(player, date, block.key));
         }
@@ -472,11 +478,40 @@ function renderResults() {
   }
 }
 
+function renderTracker() {
+  trackerList.innerHTML = "";
+  const totalBlocks = state.dates.length * TIME_BLOCKS.length;
+
+  if (!state.players.length) {
+    trackerList.innerHTML = '<p class="empty">No players available to track.</p>';
+    return;
+  }
+
+  for (const player of state.players) {
+    const progress = getPlayerProgress(player, totalBlocks);
+    const item = document.createElement("div");
+    item.className = `tracker-item ${progress.statusClass}`;
+
+    const name = document.createElement("span");
+    name.className = "tracker-name";
+    name.textContent = player;
+
+    const status = document.createElement("span");
+    status.className = "tracker-status";
+    status.textContent = progress.label;
+
+    item.appendChild(name);
+    item.appendChild(status);
+    trackerList.appendChild(item);
+  }
+}
+
 function normalizeState(raw) {
   const clean = {
     players: Array.isArray(raw?.players) ? raw.players : [],
     dates: Array.isArray(raw?.dates) ? raw.dates : [],
-    availability: raw?.availability && typeof raw.availability === "object" ? raw.availability : {}
+    availability: raw?.availability && typeof raw.availability === "object" ? raw.availability : {},
+    responseMode: raw?.responseMode === "explicit" ? "explicit" : "legacy"
   };
   sanitizeRoomData(clean);
   return clean;
@@ -496,16 +531,19 @@ function normalizePlayerName(raw) {
   return FIXED_PLAYERS.includes(normalized) ? normalized : "";
 }
 
-function normalizeTimeSlots(value) {
+function normalizeTimeSlots(value, preserveFalseResponses = true) {
   if (typeof value === "boolean") {
-    return { morning: value, afternoon: value };
+    return {
+      morning: value ? true : preserveFalseResponses ? false : null,
+      afternoon: value ? true : preserveFalseResponses ? false : null
+    };
   }
   if (!value || typeof value !== "object") {
-    return { morning: false, afternoon: false };
+    return { morning: null, afternoon: null };
   }
   return {
-    morning: Boolean(value.morning),
-    afternoon: Boolean(value.afternoon)
+    morning: normalizeResponseValue(value.morning, preserveFalseResponses),
+    afternoon: normalizeResponseValue(value.afternoon, preserveFalseResponses)
   };
 }
 
@@ -545,6 +583,84 @@ function roomShareLink(roomId) {
 
 function blockOrder(blockKey) {
   return TIME_BLOCKS.findIndex((b) => b.key === blockKey);
+}
+
+function normalizeResponseValue(value, preserveFalseResponses) {
+  if (value === true) {
+    return true;
+  }
+  if (value === false) {
+    return preserveFalseResponses ? false : null;
+  }
+  return null;
+}
+
+function nextResponseValue(currentValue) {
+  if (currentValue === null) {
+    return true;
+  }
+  if (currentValue === true) {
+    return false;
+  }
+  return null;
+}
+
+function getCellClass(canEdit, response) {
+  const classes = [canEdit ? "toggle" : "locked"];
+  if (response === true) {
+    classes.push("available");
+  } else if (response === false) {
+    classes.push("unavailable");
+  } else {
+    classes.push("pending");
+  }
+  return classes.join(" ");
+}
+
+function formatResponseLabel(response) {
+  if (response === true) {
+    return "Yes";
+  }
+  if (response === false) {
+    return "No";
+  }
+  return "Pending";
+}
+
+function getPlayerProgress(player, totalBlocks) {
+  if (!totalBlocks) {
+    return {
+      label: "Waiting for dates",
+      statusClass: "tracker-waiting"
+    };
+  }
+
+  let answered = 0;
+  for (const date of state.dates) {
+    const slots = normalizeTimeSlots(state.availability[player]?.[date]);
+    for (const block of TIME_BLOCKS) {
+      if (slots[block.key] !== null) {
+        answered += 1;
+      }
+    }
+  }
+
+  if (answered === 0) {
+    return {
+      label: `No response yet (${answered}/${totalBlocks})`,
+      statusClass: "tracker-waiting"
+    };
+  }
+  if (answered === totalBlocks) {
+    return {
+      label: `Complete (${answered}/${totalBlocks})`,
+      statusClass: "tracker-complete"
+    };
+  }
+  return {
+    label: `${answered}/${totalBlocks} answered`,
+    statusClass: "tracker-progress"
+  };
 }
 
 function createCalendarLink(dateString, blockKey, label) {

@@ -191,6 +191,42 @@ button.ghost:hover {
   font-size: 1rem;
 }
 
+.tracker-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.tracker-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.7rem 0.85rem;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(255, 247, 231, 0.08);
+}
+
+.tracker-name {
+  font-weight: 700;
+}
+
+.tracker-status {
+  color: var(--muted);
+}
+
+.tracker-item.tracker-complete {
+  background: rgba(99, 223, 148, 0.18);
+}
+
+.tracker-item.tracker-progress {
+  background: rgba(255, 214, 145, 0.14);
+}
+
+.tracker-item.tracker-waiting {
+  background: rgba(255, 255, 255, 0.05);
+}
+
 .section-head {
   display: flex;
   justify-content: space-between;
@@ -231,6 +267,16 @@ th {
 td.available {
   background: var(--ok-bg);
   color: #cbffdb;
+}
+
+td.unavailable {
+  background: rgba(255, 114, 114, 0.22);
+  color: #ffe2de;
+}
+
+td.pending {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff1cf;
 }
 
 td.toggle {

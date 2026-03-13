@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;700&family=Crimson+Text:wght@400;600;700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=8">
+  <link rel="stylesheet" href="styles.css?v=9">
 </head>
 <body>
   <div class="bg-art" aria-hidden="true"></div>
@@ -76,11 +76,17 @@
     </section>
 
     <section class="card">
+      <h2>Response Tracker</h2>
+      <p class="hint">See who has finished marking their availability and who still has pending time blocks.</p>
+      <div id="tracker-list" class="tracker-list"></div>
+    </section>
+
+    <section class="card">
       <div class="section-head">
         <h2>Availability Board</h2>
         <button id="reset-btn" class="ghost">Reset</button>
       </div>
-      <p class="hint">Each date has Morning and Afternoon. You can edit only your own row.</p>
+      <p class="hint">Each date block cycles through Pending, Yes, and No. You can edit only your own row.</p>
       <p id="editor-note" class="hint"></p>
       <div id="board-wrap" class="board-wrap"></div>
     </section>
@@ -96,7 +102,7 @@
     </section>
   </main>
 
-  <script src="firebase-config.js?v=8"></script>
-  <script type="module" src="app.js?v=8"></script>
+  <script src="firebase-config.js?v=9"></script>
+  <script type="module" src="app.js?v=9"></script>
 </body>
 </html>
